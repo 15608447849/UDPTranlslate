@@ -1,3 +1,4 @@
+import java.io.File;
 import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.lang.reflect.InvocationTargetException;
@@ -55,7 +56,7 @@ public class Upload extends ITranlsthread {
             String filePath = "C:\\FileServerDirs\\source\\def.mp4";
             FileChannel inChannel = new RandomAccessFile(filePath,"rw").getChannel();
             long fileSize = inChannel.size();
-            log("上传文件: " + filePath + " 大小:"+fileSize);
+            log("上传文件: " + filePath + " 大小:"+fileSize +"文件MD5: "+MD5Util.getFileMD5String(new File(filePath)));
             MappedByteBuffer fileBytebuffer = inChannel.map(READ_ONLY,0,fileSize);
 
             long pos = 0L;
@@ -78,18 +79,19 @@ public class Upload extends ITranlsthread {
                 channel.write(buffer);
                 perpos = pos;//上一次
                 sendCount++;
-                loopCount++;
-//                if (loopCount==3){
+//                loopCount++;
+//                if (loopCount==10){
 //                    loopCount = 0;
 //                    synchronized (this){
 //                       this.wait(10);
 //                   }
 //                }
-               if ((sendCount&1) != 0){
+//               if ((sendCount&1) != 0){
                    synchronized (this){
-                       this.wait(10);
+                       this.wait(3);
                    }
-               }
+//               }
+//               log("send count: "+ sendCount);
             }
             inChannel.close();
             new MPrivilegedAction(fileBytebuffer);

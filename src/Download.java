@@ -29,6 +29,7 @@ public class Download extends ITranlsthread {
     private InetSocketAddress toAddress;
     String filePath = "C:\\FileServerDirs\\temp\\def.mp4";
     String filePathTemp = "C:\\FileServerDirs\\temp\\def.mp4.temp";
+
     Path temp = Paths.get(filePathTemp);
     public Download(int port, InetSocketAddress toAddress) throws IOException {
         super(port);
@@ -46,7 +47,6 @@ public class Download extends ITranlsthread {
 
     @Override
     public void run() {
-
         try {
             channel.connect(toAddress);
             buffer.clear();
