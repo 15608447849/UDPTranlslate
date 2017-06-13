@@ -129,7 +129,7 @@ public class Upload extends ITranlsthread {
                     }
                     buffer.flip();
                     sendCount++;//传输次数
-                    log("发送 - "+buffer +" 当前次数:"+sendCount);
+//                    log("发送 - "+buffer +" 当前次数:"+sendCount);
                     isReadable = false;
                 }else{
                     buffer.rewind();

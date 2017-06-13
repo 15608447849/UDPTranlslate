@@ -94,7 +94,7 @@ public class Download2  extends ITranlsthread implements CompletionHandler<Integ
                     long sendCount = buf.getLong();
                     if (sendCount==recCount){
                         buf.position(9);
-                        log("接受数据 - "+buf);
+//                        log("接受数据 - "+buf);
                         //接受数据
                         fileChannel.write(buf, pos,null,this);
                         pos+=(buf.limit()-9);
@@ -103,7 +103,7 @@ public class Download2  extends ITranlsthread implements CompletionHandler<Integ
                         recCount++;
                         buffer.putLong(recCount);
                         buffer.flip();
-                        log("发送数据 - "+buffer);
+//                        log("发送数据 - "+buffer);
                         channel.write(buffer);
                     }
                 }
