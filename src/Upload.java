@@ -3,12 +3,15 @@ import java.io.IOException;
 import java.io.RandomAccessFile;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
+import java.net.InetSocketAddress;
 import java.net.SocketAddress;
 import java.nio.ByteBuffer;
 import java.nio.MappedByteBuffer;
+import java.nio.channels.DatagramChannel;
 import java.nio.channels.FileChannel;
 import java.security.AccessController;
 import java.security.PrivilegedAction;
+import java.util.concurrent.TimeUnit;
 
 import static java.nio.channels.FileChannel.MapMode.READ_ONLY;
 
@@ -17,8 +20,43 @@ import static java.nio.channels.FileChannel.MapMode.READ_ONLY;
  */
 public class Upload extends ITranlsthread {
 
+
+    final Runnable runnable = new Runnable() {
+        @Override
+        public void run() {
+            InetSocketAddress broadAddress =  new InetSocketAddress("255.255.255.255",9000);
+            try {
+                DatagramChannel broadChannel = DatagramChannel.open().bind(new InetSocketAddress(9001));
+                broadChannel.configureBlocking(false);
+            } catch (IOException e) {
+                return;
+            }
+            while (channel.isOpen()){
+                if (!channel.isConnected()){
+                    //发送局域网广播
+                    ByteBuffer buf = ByteBuffer.allocate(4); //端口号
+                    buf.clear();
+                    buf.putInt(8050);
+                    try {
+                        buf.flip();
+                        channel.send(buf,broadAddress);
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                }
+                synchronized (this){
+                    try {
+                        this.wait(2*1000);
+                    } catch (InterruptedException e) {
+                    }
+                }
+            }
+        }
+    };
+
     public Upload(int port) throws IOException {
         super(port);
+        new Thread().start();
     }
 
     @Override
@@ -56,42 +94,66 @@ public class Upload extends ITranlsthread {
             String filePath = "C:\\FileServerDirs\\source\\def.mp4";
             FileChannel inChannel = new RandomAccessFile(filePath,"rw").getChannel();
             long fileSize = inChannel.size();
-            log("上传文件: " + filePath + " 大小:"+fileSize +"文件MD5: "+MD5Util.getFileMD5String(new File(filePath)));
+            log("上传文件: " + filePath + " 大小:"+fileSize +"文件MD5: "+MD5Util.getFileMD5String(new File(filePath)) +" - " + channel.getRemoteAddress() +" - "+channel.isConnected());
+
+            buffer.clear();
+            buffer.put((byte)1);
+            buffer.putLong(fileSize);
+            buffer.flip();
+            ByteBuffer recBuf = ByteBuffer.allocate(8);
+            while (true){
+                //发送文件大小,文件MD5.
+               buffer.rewind();
+               channel.write(buffer);
+                recBuf.clear();
+                long len = channel.read(recBuf);
+                if (len>0){
+                    log("开始上传.");
+                    break;
+                }
+            }
+
+
+
             MappedByteBuffer fileBytebuffer = inChannel.map(READ_ONLY,0,fileSize);
 
-            long pos = 0L;
-            long perpos = pos;
-            int loopCount = 0 ;
+            boolean isReadable = true;
+            int overTimeCount = 0;
             while (fileBytebuffer.hasRemaining()){
-                buffer.clear();
-                buffer.position(9);
-                while (fileBytebuffer.hasRemaining() && buffer.hasRemaining()){
-                    buffer.put(fileBytebuffer.get());
-                    pos++;
+                if (isReadable){
+                    buffer.clear();
+                    buffer.put((byte)99);//数据传输
+                    buffer.putLong(sendCount);//当前传输次数.
+                    while (fileBytebuffer.hasRemaining() && buffer.hasRemaining()){
+                        buffer.put(fileBytebuffer.get());
+                    }
+                    buffer.flip();
+                    sendCount++;//传输次数
+                    log("发送 - "+buffer +" 当前次数:"+sendCount);
+                    isReadable = false;
+                }else{
+                    buffer.rewind();
                 }
-
-                buffer.position(0);
-                buffer.put((byte)99);
-                buffer.putLong(perpos);//下载保存点
-                buffer.position(buffer.limit());
-
-                buffer.flip();
                 channel.write(buffer);
-                perpos = pos;//上一次
-                sendCount++;
-//                loopCount++;
-//                if (loopCount==10){
-//                    loopCount = 0;
-//                    synchronized (this){
-//                       this.wait(10);
-//                   }
-//                }
-//               if ((sendCount&1) != 0){
-                   synchronized (this){
-                       this.wait(3);
-                   }
-//               }
-//               log("send count: "+ sendCount);
+
+                //接受
+                recBuf.clear();
+                long len = channel.read(recBuf);
+                if (len>0 ){
+                    recBuf.flip();
+                    if (recBuf.limit()==8 && recBuf.getLong() == sendCount){
+                        overTimeCount=0;
+                        isReadable = true;
+                    }
+                }else{
+                    if (overTimeCount == 300) {
+                        log("传输超时.");
+                       break;
+                    }else{
+                        TimeUnit.MICROSECONDS.sleep(10);
+                        overTimeCount++;//超时时间计数 10 * 3000次 = 30000纳秒
+                    }
+                }
             }
             inChannel.close();
             new MPrivilegedAction(fileBytebuffer);
@@ -134,3 +196,11 @@ public class Upload extends ITranlsthread {
     }
 
 }
+
+//               if ((sendCount&1) != 0){
+//                   synchronized (this){
+//                       this.wait(100);
+//                   }
+
+//               }
+//               log("send count: "+ sendCount);

@@ -20,7 +20,6 @@ public class Download2  extends ITranlsthread implements CompletionHandler<Integ
     public Download2(int port, InetSocketAddress toAddress){
         super(port);
         this.toAddress = toAddress;
-        log("###");
         startWork();
     }
 
@@ -29,15 +28,24 @@ public class Download2  extends ITranlsthread implements CompletionHandler<Integ
             if(!Files.exists(temp)){
                 Files.createFile(temp);
             }
-
             fileChannel = AsynchronousFileChannel.open(temp, StandardOpenOption.WRITE);
-            channel.connect(toAddress);
-            start();
+
+
+            try {
+                synchronized (this){
+                    this.wait(1000);
+                }
+
+            } catch (InterruptedException e) {
+                e.printStackTrace();
+            }
             buffer.clear();
             buffer.put((byte)1);
             buffer.flip();
             channel.send(buffer,toAddress);
-            log("请求已发送.");
+            channel.connect(toAddress);
+            log("请求已发送. - " + channel.isConnected());
+            start();
         } catch (IOException e) {
             e.printStackTrace();
         }
@@ -47,7 +55,6 @@ public class Download2  extends ITranlsthread implements CompletionHandler<Integ
     public void run() {
 
         try {
-            log("___________________");
             loopDownload();
         } catch (Exception e) {
             e.printStackTrace();
@@ -55,27 +62,55 @@ public class Download2  extends ITranlsthread implements CompletionHandler<Integ
     }
 
     private void loopDownload() throws IOException {
-        log("正在下载: "+temp );
+        log("请求下载: "+temp );
         long time = System.currentTimeMillis();
-        long length;
         ByteBuffer buf;
         long i = 0L;
+        byte command;
+        long recCount = 0L;
+        long pos=0L;
+        long filesize = -1L;
         while (true){
-            //放入缓冲区,如果缓冲区满了->
             buf = ByteBuffer.allocate(1+8+1024);
             buf.clear();
-            length = channel.read(buf);
-            buf.flip();
-            if ( length > 0) {
-                if (buf.limit()>9){
+            long len = channel.read(buf);
+            if (  len > 0) {
+                buf.flip();
+                command = buf.get(0);
+                log(command);
+                if (command==1 && filesize==-1){
                     buf.position(1);
-                    long position = buf.getLong();
-                    fileChannel.write(buf, position,null,this);
-                    i++;
+                    //文件信息
+                    log("文件大小: "+(filesize = buf.getLong()));
+                    buffer.clear();
+                    buffer.put((byte)1);
+                    buffer.flip();
+                    channel.write(buffer);
                 }
-                else {
+                else if (command == 99){
+
+                    //数据传输
+                    buf.position(1);
+                    long sendCount = buf.getLong();
+                    if (sendCount==recCount){
+                        buf.position(9);
+                        log("接受数据 - "+buf);
+                        //接受数据
+                        fileChannel.write(buf, pos,null,this);
+                        pos+=(buf.limit()-9);
+                        //回执
+                        buffer.clear();
+                        recCount++;
+                        buffer.putLong(recCount);
+                        buffer.flip();
+                        log("发送数据 - "+buffer);
+                        channel.write(buffer);
+                    }
+                }
+                else if (command == 100){
+                    log("接受数据完成.");
                     break;
-                }
+                    }
             }
         }
 

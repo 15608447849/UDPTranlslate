@@ -14,6 +14,9 @@ public class ITranlsthread extends Thread{
             InetSocketAddress local = new InetSocketAddress(port);
             this.channel = DatagramChannel.open().bind(local);
             this.channel.configureBlocking(false);
+//            this.channel.socket().setSoTimeout(30 * 1000);
+//            this.channel.socket().setReceiveBufferSize(1024 * 1024 * 1024);
+//            this.channel.socket().setSendBufferSize(1024 * 1024 * 1024);
         } catch (IOException e) {
             e.printStackTrace();
         }
